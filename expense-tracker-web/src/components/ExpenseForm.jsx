@@ -4,7 +4,6 @@ import { CategoryCreator } from './CategoryCreator.jsx'
 const defaultForm = {
   description: '',
   amount: '',
-  currency: 'ILS',
   expenseDate: new Date().toISOString().slice(0, 10),
   categoryId: '',
   notes: '',
@@ -28,7 +27,6 @@ export function ExpenseForm({
       ? {
           description: initialValue.description ?? '',
           amount: initialValue.amount?.toString() ?? '',
-          currency: initialValue.currency ?? 'ILS',
           expenseDate: initialValue.expenseDate ?? new Date().toISOString().slice(0, 10),
           categoryId: initialValue.categoryId ?? '',
           notes: initialValue.notes ?? '',
@@ -96,11 +94,6 @@ export function ExpenseForm({
           </label>
 
           <label>
-            Currency
-            <input value={form.currency} onChange={(event) => updateField('currency', event.target.value)} required />
-          </label>
-
-          <label>
             Date
             <input
               type="date"
@@ -146,6 +139,8 @@ export function ExpenseForm({
           Merchant
           <input value={form.merchant} onChange={(event) => updateField('merchant', event.target.value)} />
         </label>
+
+        <p className="eyebrow">All expenses are tracked in ILS.</p>
 
         <label>
           Notes

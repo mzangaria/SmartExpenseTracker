@@ -15,7 +15,8 @@ public class ExpenseTrackerApiFactory : WebApplicationFactory<Program>
             configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["UseInMemoryDatabase"] = "true",
-                ["InMemoryDatabaseName"] = $"expense-tracker-tests-{Guid.NewGuid()}"
+                ["InMemoryDatabaseName"] = $"expense-tracker-tests-{Guid.NewGuid()}",
+                ["Gemini:ApiKey"] = string.Empty
             });
         });
     }

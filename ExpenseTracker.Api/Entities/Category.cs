@@ -19,4 +19,6 @@ public class Category
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public ICollection<Expense> Expenses { get; set; } = new List<Expense>();
+
+    public ICollection<Budget> Budgets { get; set; } = new List<Budget>();
 }

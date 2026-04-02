@@ -6,9 +6,11 @@ Separate-stack MVP implementation:
 - `expense-tracker-web`: React + Vite frontend in JavaScript.
 - `ExpenseTracker.Tests`: integration tests for auth, categories, expenses, analytics, and graceful AI failure.
 
+All expenses are stored and reported in `ILS`. Currency is system-managed and not user-configurable.
+
 ## Prerequisites
 
-- .NET SDK 9
+- .NET SDK 9.0.305 via `global.json`
 - Node.js 22+
 - PostgreSQL
 
@@ -30,7 +32,7 @@ The API defaults to `http://localhost:5134` and applies migrations on startup.
 
 ```powershell
 cd .\expense-tracker-web
-npm install
+npm ci
 ```
 
 2. Optional: set `VITE_API_BASE_URL` if the API is not running at `http://localhost:5134`.
@@ -55,3 +57,15 @@ cd .\expense-tracker-web
 npm run lint
 npm run build
 ```
+
+## CI and Merge Policy
+
+- CI workflow: `.github/workflows/ci.yml`
+- Required checks before merge:
+  - `backend-test`
+  - `frontend-lint-build`
+- Protect the default branch in GitHub and require those exact checks before merge.
+- Keep local tooling aligned with CI:
+  - use the pinned .NET SDK from `global.json`
+  - use Node.js 22
+  - use `npm ci` instead of `npm install`

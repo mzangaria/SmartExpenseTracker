@@ -1,12 +1,15 @@
 using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.Dtos.Analytics;
+using ExpenseTracker.Api.Dtos.Budgets;
 using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Api.Services;
 
-public class AnalyticsService(AppDbContext dbContext) : IAnalyticsService
+public class AnalyticsService(AppDbContext dbContext, IBudgetService budgetService) : IAnalyticsService
 {
+    private const string ManagedCurrency = "ILS";
+
     public async Task<MonthlySummaryResponse> GetMonthlySummaryAsync(Guid userId, int year, int month, CancellationToken cancellationToken)
     {
         var expenses = await GetExpensesForMonth(userId, year, month).ToListAsync(cancellationToken);
@@ -22,7 +25,7 @@ public class AnalyticsService(AppDbContext dbContext) : IAnalyticsService
             NumberOfExpenses = expenses.Count,
             AverageExpense = Math.Round(total / expenses.Count, 2),
             LargestExpense = expenses.Max(item => item.Amount),
-            Currency = expenses.GroupBy(item => item.Currency).OrderByDescending(group => group.Count()).Select(group => group.Key).First()
+            Currency = ManagedCurrency
         };
     }
 
@@ -155,6 +158,11 @@ public class AnalyticsService(AppDbContext dbContext) : IAnalyticsService
         }
 
         return insights;
+    }
+
+    public Task<IReadOnlyList<BudgetVarianceResponse>> GetBudgetVarianceAsync(Guid userId, int year, int month, CancellationToken cancellationToken)
+    {
+        return budgetService.GetBudgetVarianceAsync(userId, year, month, cancellationToken);
     }
 
     private IQueryable<Entities.Expense> GetExpensesForMonth(Guid userId, int year, int month)

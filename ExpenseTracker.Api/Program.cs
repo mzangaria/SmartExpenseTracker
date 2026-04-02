@@ -40,7 +40,7 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
-builder.Services.AddScoped<IAiClassificationService, GeminiAiClassificationService>();
+builder.Services.AddScoped<IBudgetService, BudgetService>();
 builder.Services.AddHttpClient<IAiClassificationService, GeminiAiClassificationService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();

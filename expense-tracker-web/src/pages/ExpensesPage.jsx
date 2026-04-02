@@ -171,7 +171,7 @@ export function ExpensesPage({ mode }) {
                     <span>{expense.categorySource === 'ai' ? 'AI-assisted' : 'Manual'}</span>
                   </div>
                   <div className="expense-actions">
-                    <strong>{formatCurrency(expense.amount, expense.currency)}</strong>
+                    <strong>{formatCurrency(expense.amount)}</strong>
                     <Link to={`/expenses/${expense.id}/edit`}>Edit</Link>
                     <button className="ghost-button" onClick={() => setDeleteTarget(expense)}>Delete</button>
                   </div>

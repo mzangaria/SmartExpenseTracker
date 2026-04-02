@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5134'
+const JSON_CONTENT_TYPE = 'application/json'
 
 function buildHeaders(token, hasBody = false) {
   const headers = {}
@@ -26,14 +27,26 @@ export async function apiRequest(path, { method = 'GET', token, body } = {}) {
   }
 
   const text = await response.text()
-  const payload = text ? JSON.parse(text) : null
+  const contentType = response.headers.get('content-type') ?? ''
+  const isJson = contentType.toLowerCase().includes(JSON_CONTENT_TYPE)
+  let payload = null
+
+  if (text && isJson) {
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = null
+    }
+  }
 
   if (!response.ok) {
-    const error = new Error(payload?.message ?? 'Request failed')
+    const fallbackMessage = text && !isJson ? text : response.statusText || 'Request failed'
+    const error = new Error(payload?.message ?? fallbackMessage)
     error.status = response.status
     error.payload = payload
+    error.rawBody = text || null
     throw error
   }
 
-  return payload
+  return isJson ? payload : text || null
 }

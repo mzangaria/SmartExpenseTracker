@@ -5,11 +5,12 @@ using ExpenseTracker.Api.Enums;
 using ExpenseTracker.Api.Services.Interfaces;
 using ExpenseTracker.Api.Services.Models;
 using Microsoft.EntityFrameworkCore;
-
 namespace ExpenseTracker.Api.Services;
 
 public class ExpenseService(AppDbContext dbContext, ICategoryService categoryService) : IExpenseService
 {
+    private const string ManagedCurrency = "ILS";
+
     public async Task<ExpenseResponse> CreateAsync(Guid userId, ExpenseRequest request, CancellationToken cancellationToken)
     {
         var category = await categoryService.GetOwnedCategoryAsync(userId, request.CategoryId, cancellationToken)
@@ -20,7 +21,7 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
             UserId = userId,
             Description = request.Description.Trim(),
             Amount = decimal.Round(request.Amount, 2),
-            Currency = request.Currency.Trim().ToUpperInvariant(),
+            Currency = ManagedCurrency,
             CategoryId = category.Id,
             ExpenseDate = request.ExpenseDate,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
@@ -74,7 +75,7 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
 
         expense.Description = request.Description.Trim();
         expense.Amount = decimal.Round(request.Amount, 2);
-        expense.Currency = request.Currency.Trim().ToUpperInvariant();
+        expense.Currency = ManagedCurrency;
         expense.CategoryId = category.Id;
         expense.Category = category;
         expense.ExpenseDate = request.ExpenseDate;
@@ -133,10 +134,31 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var search = query.Search.Trim().ToLowerInvariant();
-            expenses = expenses.Where(item => item.Description.ToLower().Contains(search));
+            var search = query.Search.Trim();
+            expenses = ApplySearch(expenses, search);
         }
 
         return expenses;
+    }
+
+    private IQueryable<Expense> ApplySearch(IQueryable<Expense> expenses, string search)
+    {
+        var escapedSearch = EscapeLikePattern(search);
+
+        if (dbContext.Database.IsNpgsql())
+        {
+            return expenses.Where(item => EF.Functions.ILike(item.Description, $"%{escapedSearch}%", @"\"));
+        }
+
+        var normalizedSearch = search.ToUpperInvariant();
+        return expenses.Where(item => item.Description.ToUpper().Contains(normalizedSearch));
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace(@"\", @"\\", StringComparison.Ordinal)
+            .Replace("%", @"\%", StringComparison.Ordinal)
+            .Replace("_", @"\_", StringComparison.Ordinal);
     }
 }

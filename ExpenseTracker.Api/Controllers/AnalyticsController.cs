@@ -1,4 +1,5 @@
 using ExpenseTracker.Api.Dtos.Analytics;
+using ExpenseTracker.Api.Dtos.Budgets;
 using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,14 @@ public class AnalyticsController(ICurrentUserService currentUserService, IAnalyt
     {
         var userId = currentUserService.GetRequiredUserId();
         var response = await analyticsService.GetInsightsAsync(userId, NormalizeYear(year), NormalizeMonth(month), cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpGet("budget-variance")]
+    public async Task<ActionResult<IReadOnlyList<BudgetVarianceResponse>>> GetBudgetVariance([FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.GetRequiredUserId();
+        var response = await analyticsService.GetBudgetVarianceAsync(userId, NormalizeYear(year), NormalizeMonth(month), cancellationToken);
         return Ok(response);
     }
 
