@@ -353,6 +353,13 @@ button {
   gap: 1rem;
 }
 
+.natural-inbox {
+  padding: 1rem;
+  border: 1px dashed rgba(15, 118, 110, 0.35);
+  border-radius: 22px;
+  background: rgba(240, 253, 250, 0.8);
+}
+
 .filters-grid,
 .form-grid {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

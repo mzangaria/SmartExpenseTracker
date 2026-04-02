@@ -20,6 +20,7 @@ export function ExpensesPage({ mode }) {
   const [aiMessage, setAiMessage] = useState(null)
   const [saving, setSaving] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
+  const [parseLoading, setParseLoading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
   const loadCategories = useCallback(async () => {
@@ -86,6 +87,30 @@ export function ExpensesPage({ mode }) {
     }
   }
 
+  async function handleParseExpense(text) {
+    if (!text.trim()) {
+      const message = { success: false, text: 'Enter a sentence before parsing.' }
+      setAiMessage(message)
+      return null
+    }
+
+    setParseLoading(true)
+    try {
+      const result = await apiRequest('/ai/parse-expense', { method: 'POST', token, body: { text } })
+      const warnings = result.warnings?.length ? ` Warnings: ${result.warnings.join(' ')}` : ''
+      const missing = result.missingFields?.length ? ` Missing: ${result.missingFields.join(', ')}.` : ''
+      setAiMessage({
+        success: result.success,
+        text: result.success
+          ? `Expense draft parsed successfully.${warnings}`
+          : `${result.message ?? 'The expense was parsed partially.'}${warnings}${missing}`,
+      })
+      return result
+    } finally {
+      setParseLoading(false)
+    }
+  }
+
   async function handleSubmit(form) {
     setSaving(true)
     setErrorMessage('')
@@ -139,9 +164,11 @@ export function ExpensesPage({ mode }) {
             initialValue={editingExpense}
             onSubmit={handleSubmit}
             onSuggestCategory={handleSuggestCategory}
+            onParseExpense={handleParseExpense}
             onCreateCategory={handleCreateCategory}
             saving={saving}
             aiLoading={aiLoading}
+            parseLoading={parseLoading}
             errorMessage={errorMessage}
             aiMessage={aiMessage}
           />

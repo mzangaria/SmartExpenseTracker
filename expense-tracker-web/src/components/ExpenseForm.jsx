@@ -16,9 +16,11 @@ export function ExpenseForm({
   initialValue,
   onSubmit,
   onSuggestCategory,
+  onParseExpense,
   onCreateCategory,
   saving,
   aiLoading,
+  parseLoading,
   errorMessage,
   aiMessage,
 }) {
@@ -35,6 +37,25 @@ export function ExpenseForm({
         }
       : defaultForm
   ))
+  const [inboxText, setInboxText] = useState('')
+
+  function applyParsedDraft(result) {
+    const draft = result?.draft
+    if (!draft) {
+      return
+    }
+
+    setForm((current) => ({
+      ...current,
+      description: draft.description ?? current.description,
+      amount: draft.amount?.toString() ?? current.amount,
+      expenseDate: draft.expenseDate ?? current.expenseDate,
+      categoryId: draft.categoryId ?? current.categoryId,
+      notes: draft.notes ?? current.notes,
+      merchant: draft.merchant ?? current.merchant,
+      useAiCategory: Boolean(draft.useAiCategory && draft.categoryId),
+    }))
+  }
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -60,6 +81,13 @@ export function ExpenseForm({
     }
   }
 
+  async function handleParseExpense() {
+    const result = await onParseExpense(inboxText)
+    if (result) {
+      applyParsedDraft(result)
+    }
+  }
+
   return (
     <div className="panel">
       <div className="panel-header">
@@ -70,6 +98,24 @@ export function ExpenseForm({
       </div>
 
       <form className="expense-form" onSubmit={handleSubmit}>
+        <div className="natural-inbox">
+          <label>
+            Natural-Language Inbox
+            <textarea
+              value={inboxText}
+              onChange={(event) => setInboxText(event.target.value)}
+              rows="3"
+              placeholder="Spent 42 ILS on sushi yesterday at Japanika"
+            />
+          </label>
+          <div className="inline-actions">
+            <button type="button" onClick={handleParseExpense} disabled={parseLoading || !inboxText.trim()}>
+              {parseLoading ? 'Parsing expense...' : 'Parse Expense'}
+            </button>
+          </div>
+          <p className="eyebrow">Write one expense in free text and review the generated draft below.</p>
+        </div>
+
         <label>
           Description
           <input

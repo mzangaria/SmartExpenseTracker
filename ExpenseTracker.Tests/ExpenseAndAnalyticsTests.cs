@@ -112,6 +112,77 @@ public class ExpenseAndAnalyticsTests(ExpenseTrackerApiFactory factory) : IClass
     }
 
     [Fact]
+    public async Task ParseExpense_ExtractsAmountDateMerchant_AndKnownCategory()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "parse1@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        var response = await client.PostAsJsonAsync("/ai/parse-expense", new ParseExpenseRequest
+        {
+            Text = "Spent 42 ILS on sushi yesterday at Japanika"
+        });
+
+        response.EnsureSuccessStatusCode();
+        var parsed = await response.Content.ReadFromJsonAsync<ParseExpenseResponse>();
+
+        Assert.NotNull(parsed);
+        Assert.True(parsed!.Success);
+        Assert.Equal(42m, parsed.Draft.Amount);
+        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1), parsed.Draft.ExpenseDate);
+        Assert.Equal("Japanika", parsed.Draft.Merchant);
+        Assert.NotNull(parsed.Draft.CategoryId);
+        Assert.Equal("Food", parsed.Draft.CategoryName);
+    }
+
+    [Fact]
+    public async Task ParseExpense_ReturnsPartialDraft_WhenAmountMissing()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "parse2@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        var response = await client.PostAsJsonAsync("/ai/parse-expense", new ParseExpenseRequest
+        {
+            Text = "coffee with friend"
+        });
+
+        response.EnsureSuccessStatusCode();
+        var parsed = await response.Content.ReadFromJsonAsync<ParseExpenseResponse>();
+
+        Assert.NotNull(parsed);
+        Assert.False(parsed!.Success);
+        Assert.Contains("amount", parsed.MissingFields);
+        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow), parsed.Draft.ExpenseDate);
+        Assert.Contains("Date defaulted to today.", parsed.Warnings);
+    }
+
+    [Fact]
+    public async Task ParseExpense_CanResolveCustomCategory_Deterministically()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "parse3@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        await client.PostAsJsonAsync("/categories", new CreateCategoryRequest
+        {
+            Name = "Gym"
+        });
+
+        var response = await client.PostAsJsonAsync("/ai/parse-expense", new ParseExpenseRequest
+        {
+            Text = "gym membership 150 yesterday"
+        });
+
+        response.EnsureSuccessStatusCode();
+        var parsed = await response.Content.ReadFromJsonAsync<ParseExpenseResponse>();
+
+        Assert.NotNull(parsed);
+        Assert.Equal("Gym", parsed!.Draft.CategoryName);
+        Assert.Equal(150m, parsed.Draft.Amount);
+    }
+
+    [Fact]
     public async Task Budgets_CanBeManaged_AndVarianceThresholdsAreCalculated()
     {
         using var client = factory.CreateClient();
