@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.IdentityModel.Tokens;
 
+// Program.cs is the composition root: it wires configuration, DI, middleware, auth, and startup database work.
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -22,6 +23,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 var useInMemoryDatabase = builder.Environment.IsEnvironment("Testing") || builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
 if (useInMemoryDatabase)
 {
+    // Tests use an isolated in-memory database instead of PostgreSQL.
     var databaseName = builder.Configuration["InMemoryDatabaseName"] ?? $"expense-tracker-{Guid.NewGuid()}";
     builder.Services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(databaseName));
 }
@@ -30,7 +32,8 @@ else
     builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 }
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(); // knows by classes that inherit from ControllerBase and ones
+                                // with [ApiController]
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpContextAccessor();
@@ -64,6 +67,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+// AddCors is needed to allow the frontend (which runs on a different origin during development) to make requests to the API.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -78,7 +82,9 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Build the app, then apply any pending database migrations and seed baseline data before starting to accept requests.
 var app = builder.Build();
+
 
 if (app.Environment.IsDevelopment())
 {
@@ -86,16 +92,24 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// This build the middleware pipeline that every request goes through. Order matters.
+// "what happens to every request before it reaches a controller?"
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
+app.MapControllers(); // "take all controller actions and make them reachable by HTTP"
+/* What it actually does (app.MapControllers();): 
+Scans the project for classes marked with [ApiController]
+Reads their [Route] and HTTP attributes ([HttpGet], [HttpPost], etc.)
+Creates endpoints from them
+Hooks those endpoints into the request pipeline */
 
-using (var scope = app.Services.CreateScope())
+using (var scope = app.Services.CreateScope()) // Create a scope to get scoped services like AppDbContext
 {
+    // Apply schema changes on startup, then make sure baseline data exists.
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (dbContext.Database.IsRelational())
+    if (dbContext.Database.IsRelational()) 
     {
         dbContext.Database.Migrate();
     }
@@ -104,9 +118,9 @@ using (var scope = app.Services.CreateScope())
         dbContext.Database.EnsureCreated();
     }
 
-    await AppDbSeeder.SeedAsync(dbContext);
+    await AppDbSeeder.SeedAsync(dbContext); 
 }
 
-app.Run();
+app.Run(); 
 
 public partial class Program;

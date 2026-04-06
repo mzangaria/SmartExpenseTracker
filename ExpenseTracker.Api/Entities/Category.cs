@@ -8,7 +8,7 @@ public class Category
 
     public string Name { get; set; } = string.Empty;
 
-    public CategoryType Type { get; set; }
+    public CategoryType Type { get; set; } // This is an enum, (System/Custom,..if any)
 
     public Guid? UserId { get; set; }
 

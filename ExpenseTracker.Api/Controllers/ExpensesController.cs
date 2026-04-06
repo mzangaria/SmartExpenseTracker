@@ -8,11 +8,23 @@ namespace ExpenseTracker.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("expenses")]
+// Controllers stay thin here: they handle HTTP concerns and delegate business rules to services.
+/*
+    * This file defines an ASP.NET Core API controller for expenses.
+    * Its job is to receive HTTP requests, extract request data,
+    * enforce request-level concerns like authorization and routing,
+    * and then delegate the real business work to services.
+    */
 public class ExpensesController(ICurrentUserService currentUserService, IExpenseService expenseService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ExpenseResponse>>> GetAll([FromQuery] ExpenseQueryParameters query, CancellationToken cancellationToken)
     {
+                                                                    /*
+                                                                    Why use [FromQuery]:
+                                                                        It makes the source explicit and is common for filtering,
+                                                                        sorting, pagination, date ranges, etc.   
+                                                                    */
         var userId = currentUserService.GetRequiredUserId();
         var expenses = await expenseService.GetListAsync(userId, query, cancellationToken);
         return Ok(expenses);
@@ -37,6 +49,7 @@ public class ExpensesController(ICurrentUserService currentUserService, IExpense
         }
         catch (InvalidOperationException exception)
         {
+            // Service-layer validation errors are translated into an HTTP validation response.
             ModelState.AddModelError(nameof(request.CategoryId), exception.Message);
             return ValidationProblem(ModelState);
         }

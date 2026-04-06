@@ -10,7 +10,7 @@ namespace ExpenseTracker.Api.Controllers;
 [Route("ai")]
 public class AiController(ICurrentUserService currentUserService, IAiClassificationService aiClassificationService) : ControllerBase
 {
-    [HttpPost("classify-expense")]
+    [HttpPost("classify-expense")] // this function is for classifying an expense description into a category.
     public async Task<ActionResult<ClassifyExpenseResponse>> ClassifyExpense(ClassifyExpenseRequest request, CancellationToken cancellationToken)
     {
         var userId = currentUserService.GetRequiredUserId();
@@ -18,7 +18,7 @@ public class AiController(ICurrentUserService currentUserService, IAiClassificat
         return Ok(response);
     }
 
-    [HttpPost("parse-expense")]
+    [HttpPost("parse-expense")] // this function is for parsing structured data from an unstructured text, like "I spent $20 on lunch yesterday" into an amount, category, and date.
     public async Task<ActionResult<ParseExpenseResponse>> ParseExpense(ParseExpenseRequest request, CancellationToken cancellationToken)
     {
         var userId = currentUserService.GetRequiredUserId();

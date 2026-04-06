@@ -4,11 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Api.Data;
 
+// AppDbContext is EF Core's main entry point for queries, saves, and model configuration.
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public DbSet<User> Users => Set<User>();
+    public DbSet<User> Users => Set<User>(); // Set is a built-in method from DbContext, returns DbSet<User> dynamically.
 
-    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Category> Categories => Set<Category>(); 
 
     public DbSet<Expense> Expenses => Set<Expense>();
 
@@ -16,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // User email is unique and required because it is the login identity.
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(user => user.Id);
@@ -42,15 +44,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(expense => expense.CategorySource).HasConversion<string>().HasMaxLength(20);
             entity.HasIndex(expense => new { expense.UserId, expense.ExpenseDate });
             entity.HasIndex(expense => new { expense.UserId, expense.CategoryId });
-            entity.ToTable(table => table.HasCheckConstraint("CK_Expenses_Currency_ILS", "\"Currency\" = 'ILS'"));
+            // Currency is system-managed, so the database enforces ILS as well.
+            entity.ToTable(table => table.HasCheckConstraint("CK_Expenses_Currency_ILS", "\"Currency\" = 'ILS'")); // enforce 
+                                                                                                    // ILS to the whole column.
             entity.HasOne(expense => expense.User)
                 .WithMany(user => user.Expenses)
                 .HasForeignKey(expense => expense.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Cascade); // if user is deleted, all its expenses is deleted automatically.
             entity.HasOne(expense => expense.Category)
                 .WithMany(category => category.Expenses)
                 .HasForeignKey(expense => expense.CategoryId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict); // if category is deleted, the expenses will not be deleted, 
+                    // but their CategoryId will be set to null (if nullable) or throw an error (if not nullable). 
+                    // In this case, we choose to throw an error to prevent orphaned expenses without a category.
         });
 
         modelBuilder.Entity<Budget>(entity =>
@@ -68,6 +74,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // Built-in categories are seeded into the model so every environment starts with the same base set.
         var seedTimestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var seedCategories = SystemCategoryCatalog.Names.Select((name, index) => new Category
         {

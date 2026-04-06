@@ -7,12 +7,16 @@ using ExpenseTracker.Api.Services.Models;
 using Microsoft.EntityFrameworkCore;
 namespace ExpenseTracker.Api.Services;
 
+// ExpenseService owns expense business rules and EF Core query composition.
 public class ExpenseService(AppDbContext dbContext, ICategoryService categoryService) : IExpenseService
-{
+    {    //the inputs called Dependency Injection (DI). 
+        // The framework will automatically provide the required dependencies (AppDbContext and ICategoryService),
+        // when creating an instance of ExpenseService. 
     private const string ManagedCurrency = "ILS";
 
     public async Task<ExpenseResponse> CreateAsync(Guid userId, ExpenseRequest request, CancellationToken cancellationToken)
     {
+        // A user can only create expenses against categories they are allowed to use.
         var category = await categoryService.GetOwnedCategoryAsync(userId, request.CategoryId, cancellationToken)
             ?? throw new InvalidOperationException("Invalid category selected.");
 
@@ -33,14 +37,15 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
 
         dbContext.Expenses.Add(expense);
         await dbContext.SaveChangesAsync(cancellationToken);
-        await dbContext.Entry(expense).Reference(item => item.Category).LoadAsync(cancellationToken);
+        await dbContext.Entry(expense).Reference(item => item.Category).LoadAsync(cancellationToken); // Category is foreign key.
+            // load the category navigation property after saving, so that it can be included in the response DTO.
 
         return expense.ToResponse();
     }
 
     public async Task<IReadOnlyList<ExpenseResponse>> GetListAsync(Guid userId, ExpenseQueryParameters query, CancellationToken cancellationToken)
     {
-        var expenses = BuildQuery(userId, query);
+        var expenses = BuildQuery(userId, query); // Build the query with filters, but do not execute it yet.
         var results = await expenses
             .OrderByDescending(expense => expense.ExpenseDate)
             .ThenByDescending(expense => expense.CreatedAtUtc)
@@ -52,9 +57,9 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
     public async Task<ExpenseResponse?> GetByIdAsync(Guid userId, Guid expenseId, CancellationToken cancellationToken)
     {
         var expense = await dbContext.Expenses
-            .AsNoTracking()
-            .Include(item => item.Category)
-            .FirstOrDefaultAsync(item => item.Id == expenseId && item.UserId == userId, cancellationToken);
+            .AsNoTracking() // read-only query, no tracking needed for updates, improves performance.
+            .Include(item => item.Category) //
+            .FirstOrDefaultAsync(item => item.Id == expenseId && item.UserId == userId, cancellationToken); //takes first result. if not found, returns null.
 
         return expense?.ToResponse();
     }
@@ -105,6 +110,7 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
 
     private IQueryable<Expense> BuildQuery(Guid userId, ExpenseQueryParameters query)
     {
+        // Build the EF query first; execution happens later when materialized with ToListAsync/FirstOrDefaultAsync.
         var expenses = dbContext.Expenses
             .AsNoTracking()
             .Include(item => item.Category)
@@ -143,10 +149,11 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
 
     private IQueryable<Expense> ApplySearch(IQueryable<Expense> expenses, string search)
     {
-        var escapedSearch = EscapeLikePattern(search);
+        var escapedSearch = EscapeLikePattern(search); 
 
-        if (dbContext.Database.IsNpgsql())
+        if (dbContext.Database.IsNpgsql()) 
         {
+            // PostgreSQL gets case-insensitive search translated to SQL via ILike.
             return expenses.Where(item => EF.Functions.ILike(item.Description, $"%{escapedSearch}%", @"\"));
         }
 
@@ -155,7 +162,8 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
     }
 
     private static string EscapeLikePattern(string value)
-    {
+    { // Escape special characters for SQL LIKE pattern. In EF Core, 
+    // we can specify the escape character (here we use backslash) in the query, so we need to escape it in the search term as well.
         return value
             .Replace(@"\", @"\\", StringComparison.Ordinal)
             .Replace("%", @"\%", StringComparison.Ordinal)

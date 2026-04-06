@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace ExpenseTracker.Api.Services;
 
+// JwtTokenService creates the signed bearer token returned after login or registration.
 public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
 {
     private readonly JwtOptions _options = options.Value;
@@ -17,6 +18,7 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
     public AuthResponse CreateToken(User user)
     {
         var expiresAt = DateTime.UtcNow.AddMinutes(_options.ExpirationMinutes);
+        // These claims are what the rest of the app reads from HttpContext.User later.
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
