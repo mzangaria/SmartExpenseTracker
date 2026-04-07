@@ -16,7 +16,8 @@ namespace ExpenseTracker.Api.Controllers;
 public class AuthController(
     AppDbContext dbContext,
     PasswordHasher<User> passwordHasher,
-    IJwtTokenService jwtTokenService) : ControllerBase
+    IJwtTokenService jwtTokenService,
+    IFinancialMessageService financialMessageService) : ControllerBase
 {
     [HttpPost("register")]
     [AllowAnonymous]
@@ -41,6 +42,16 @@ public class AuthController(
 
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await financialMessageService.CreateSystemMessageAsync(
+            user.Id,
+            Enums.FinancialMessageType.SystemInsight,
+            Enums.FinancialMessageSeverity.Low,
+            "Your financial inbox is ready",
+            "This inbox will keep important financial alerts, forecasts, and coaching messages as the product grows.",
+            null,
+            null,
+            null,
+            cancellationToken);
 
         return Ok(jwtTokenService.CreateToken(user));
     }

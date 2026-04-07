@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
+import { InboxLink } from './InboxLink.jsx'
 
 export function Shell({ children }) {
   const navigate = useNavigate()
@@ -21,6 +22,7 @@ export function Shell({ children }) {
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/expenses">Expenses</NavLink>
           <NavLink to="/dashboard#analytics">Analytics</NavLink>
+          <InboxLink />
           <NavLink to="/profile">Profile</NavLink>
           <button className="ghost-button" onClick={handleLogout}>Logout</button>
         </nav>

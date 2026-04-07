@@ -168,6 +168,22 @@ button {
   border-radius: 999px;
 }
 
+.topnav-inbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.topnav-badge {
+  min-width: 1.4rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #0f766e;
+  color: white;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
 .topnav a.active {
   background: rgba(15, 118, 110, 0.12);
   color: #0f766e;
@@ -336,6 +352,11 @@ button {
   color: #b91c1c;
 }
 
+.budget-pill--info {
+  background: rgba(15, 118, 110, 0.12);
+  color: #155e75;
+}
+
 .expense-row--full + .expense-row--full {
   margin-top: 0.75rem;
 }
@@ -392,6 +413,56 @@ button {
 
 .inline-success {
   color: #0f766e;
+}
+
+.inbox-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.message-card {
+  border: 1px solid rgba(145, 158, 149, 0.28);
+  border-radius: 22px;
+  background: rgba(248, 251, 249, 0.92);
+  padding: 1rem;
+}
+
+.message-card--unread {
+  border-left: 4px solid #0f766e;
+}
+
+.message-card--read {
+  border-left: 4px solid #94a3b8;
+}
+
+.message-card--dismissed {
+  border-left: 4px solid #d97706;
+}
+
+.message-card--archived {
+  border-left: 4px solid #64748b;
+  opacity: 0.85;
+}
+
+.message-card__header,
+.message-card__meta,
+.message-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.message-status,
+.message-date {
+  color: #516070;
+}
+
+.message-card h3,
+.message-card p {
+  margin-top: 0;
 }
 
 @media (max-width: 768px) {

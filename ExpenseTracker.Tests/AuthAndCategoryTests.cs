@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ExpenseTracker.Api.Dtos.Auth;
 using ExpenseTracker.Api.Dtos.Categories;
+using ExpenseTracker.Api.Dtos.FinancialMessages;
 
 namespace ExpenseTracker.Tests;
 
@@ -35,6 +36,12 @@ public class AuthAndCategoryTests(ExpenseTrackerApiFactory factory) : IClassFixt
 
         Assert.NotNull(me);
         Assert.Equal(auth.User.Id, me.Id);
+
+        var inboxMessages = await client.GetFromJsonAsync<List<FinancialMessageResponse>>("/financial-messages");
+        Assert.NotNull(inboxMessages);
+        var welcomeMessage = Assert.Single(inboxMessages!);
+        Assert.Equal("systeminsight", welcomeMessage.Type);
+        Assert.Equal("unread", welcomeMessage.Status);
     }
 
     [Fact]
@@ -59,6 +66,44 @@ public class AuthAndCategoryTests(ExpenseTrackerApiFactory factory) : IClassFixt
 
         Assert.Contains(ownerCategories!, category => category.Name == "Pets");
         Assert.DoesNotContain(secondCategories!, category => category.Name == "Pets");
+    }
+
+    [Fact]
+    public async Task FinancialMessages_AreUserScoped_And_StatusChangesAreTracked()
+    {
+        using var ownerClient = factory.CreateClient();
+        var ownerSession = await RegisterAsync(ownerClient, "owner-inbox@example.com");
+        ownerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ownerSession.Token);
+
+        using var secondClient = factory.CreateClient();
+        var secondSession = await RegisterAsync(secondClient, "other-inbox@example.com");
+        secondClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secondSession.Token);
+
+        var ownerMessages = await ownerClient.GetFromJsonAsync<List<FinancialMessageResponse>>("/financial-messages");
+        var secondMessages = await secondClient.GetFromJsonAsync<List<FinancialMessageResponse>>("/financial-messages");
+
+        Assert.NotNull(ownerMessages);
+        Assert.NotNull(secondMessages);
+
+        var ownerMessage = Assert.Single(ownerMessages!);
+        var secondMessage = Assert.Single(secondMessages!);
+        Assert.NotEqual(ownerMessage.Id, secondMessage.Id);
+
+        var forbidden = await secondClient.PostAsync($"/financial-messages/{ownerMessage.Id}/archive", content: null);
+        Assert.Equal(HttpStatusCode.NotFound, forbidden.StatusCode);
+
+        var readResponse = await ownerClient.PostAsync($"/financial-messages/{ownerMessage.Id}/read", content: null);
+        readResponse.EnsureSuccessStatusCode();
+
+        var unreadCount = await ownerClient.GetFromJsonAsync<UnreadCountResponse>("/financial-messages/unread-count");
+        Assert.NotNull(unreadCount);
+        Assert.Equal(0, unreadCount!.Count);
+
+        var readMessages = await ownerClient.GetFromJsonAsync<List<FinancialMessageResponse>>("/financial-messages?status=read");
+        Assert.NotNull(readMessages);
+        var updatedMessage = Assert.Single(readMessages!);
+        Assert.Equal(ownerMessage.Id, updatedMessage.Id);
+        Assert.NotNull(updatedMessage.ReadAtUtc);
     }
 
     private static async Task<AuthResponse> RegisterAsync(HttpClient client, string email)

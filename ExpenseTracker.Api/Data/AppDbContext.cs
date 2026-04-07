@@ -15,6 +15,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<Budget> Budgets => Set<Budget>();
 
+    public DbSet<FinancialMessage> FinancialMessages => Set<FinancialMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // User email is unique and required because it is the login identity.
@@ -72,6 +74,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(category => category.Budgets)
                 .HasForeignKey(budget => budget.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FinancialMessage>(entity =>
+        {
+            entity.HasKey(message => message.Id);
+            entity.Property(message => message.Title).HasMaxLength(150).IsRequired();
+            entity.Property(message => message.Message).HasMaxLength(1000).IsRequired();
+            entity.Property(message => message.Type).HasConversion<string>().HasMaxLength(30);
+            entity.Property(message => message.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(message => message.Severity).HasConversion<string>().HasMaxLength(20);
+            entity.Property(message => message.ContextJson).HasMaxLength(4000);
+            entity.HasIndex(message => new { message.UserId, message.Status, message.CreatedAtUtc });
+            entity.HasIndex(message => new { message.UserId, message.Type, message.CreatedAtUtc });
+            entity.HasOne(message => message.User)
+                .WithMany(user => user.FinancialMessages)
+                .HasForeignKey(message => message.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Built-in categories are seeded into the model so every environment starts with the same base set.
