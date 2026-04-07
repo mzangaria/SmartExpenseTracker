@@ -16,9 +16,12 @@ All expenses are stored and reported in `ILS`. Currency is system-managed and no
 
 ## Backend setup
 
-1. Create a PostgreSQL database named `expense_tracker`, or update the connection string in `ExpenseTracker.Api/appsettings.json`.
-2. Optional but recommended: set `Gemini__ApiKey` as an environment variable for live AI suggestions.
-3. Run the API:
+1. Provide secrets through environment variables, `dotnet user-secrets`, or a secret manager. Do not store real credentials in `appsettings.json`.
+2. Set `ConnectionStrings__DefaultConnection` or `DATABASE_URL` for PostgreSQL.
+3. Set `Jwt__Key` to a strong random value with at least 32 characters.
+4. Optional: set `Gemini__ApiKey` for live AI suggestions.
+5. Create a PostgreSQL database named `expense_tracker` if your connection string points to it.
+6. Run the API:
 
 ```powershell
 dotnet run --project .\ExpenseTracker.Api\ExpenseTracker.Api.csproj

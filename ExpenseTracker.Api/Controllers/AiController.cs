@@ -2,12 +2,14 @@ using ExpenseTracker.Api.Dtos.Ai;
 using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ExpenseTracker.Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("ai")]
+[EnableRateLimiting("ai")]
 public class AiController(ICurrentUserService currentUserService, IAiClassificationService aiClassificationService) : ControllerBase
 {
     [HttpPost("classify-expense")] // this function is for classifying an expense description into a category.

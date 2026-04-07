@@ -8,7 +8,7 @@ public class JwtOptions
 
     public string Audience { get; set; } = "ExpenseTracker.Client";
 
-    public string Key { get; set; } = "IdontKnowWhatKeyToPutHereSoImJustGonnaType1234567890";
+    public string Key { get; set; } = string.Empty;
 
     public int ExpirationMinutes { get; set; } = 120;
 }

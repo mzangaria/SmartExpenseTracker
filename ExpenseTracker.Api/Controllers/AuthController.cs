@@ -6,6 +6,7 @@ using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Api.Controllers;
@@ -17,7 +18,9 @@ public class AuthController(
     AppDbContext dbContext,
     PasswordHasher<User> passwordHasher,
     IJwtTokenService jwtTokenService,
-    IFinancialMessageService financialMessageService) : ControllerBase
+    IFinancialMessageService financialMessageService,
+    ILoginAttemptTracker loginAttemptTracker,
+    ILogger<AuthController> logger) : ControllerBase
 {
     [HttpPost("register")]
     [AllowAnonymous]
@@ -58,21 +61,43 @@ public class AuthController(
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var remoteIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        if (loginAttemptTracker.IsLockedOut(normalizedEmail, remoteIpAddress, out var retryAfter))
+        {
+            Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+            logger.LogWarning("Blocked login attempt for {Email} from {IpAddress} due to active lockout.", normalizedEmail, remoteIpAddress);
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Too many failed login attempts. Try again later." });
+        }
+
         var user = await dbContext.Users.FirstOrDefaultAsync(item => item.Email == normalizedEmail, cancellationToken);
         if (user is null)
         {
+            loginAttemptTracker.RecordFailure(normalizedEmail, remoteIpAddress);
             return Unauthorized(new { message = "Wrong credentials." });
         }
 
         var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (result == PasswordVerificationResult.Failed)
         {
+            var failureCount = loginAttemptTracker.RecordFailure(normalizedEmail, remoteIpAddress);
+            if (failureCount >= 5)
+            {
+                logger.LogWarning(
+                    "Repeated failed login attempts detected for {Email} from {IpAddress}. FailureCount={FailureCount}.",
+                    normalizedEmail,
+                    remoteIpAddress,
+                    failureCount);
+            }
+
             return Unauthorized(new { message = "Wrong credentials." });
         }
 
+        loginAttemptTracker.Reset(normalizedEmail, remoteIpAddress);
         return Ok(jwtTokenService.CreateToken(user));
     }
 

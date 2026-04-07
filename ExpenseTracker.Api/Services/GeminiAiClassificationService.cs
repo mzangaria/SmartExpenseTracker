@@ -55,8 +55,9 @@ public class GeminiAiClassificationService(
         {
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"{_options.BaseUrl}/models/{_options.Model}:generateContent?key={_options.ApiKey}");
+                $"{_options.BaseUrl}/models/{_options.Model}:generateContent");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Headers.Add("x-goog-api-key", _options.ApiKey);
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new
                 {
