@@ -1,4 +1,5 @@
 using ExpenseTracker.Api.Dtos.Expenses;
+using ExpenseTracker.Api.Exceptions;
 using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -47,10 +48,10 @@ public class ExpensesController(ICurrentUserService currentUserService, IExpense
             var expense = await expenseService.CreateAsync(userId, request, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = expense.Id }, expense);
         }
-        catch (InvalidOperationException exception)
+        catch (BusinessValidationException exception)
         {
             // Service-layer validation errors are translated into an HTTP validation response.
-            ModelState.AddModelError(nameof(request.CategoryId), exception.Message);
+            ModelState.AddModelError(exception.Field, exception.Message);
             return ValidationProblem(ModelState);
         }
     }
@@ -64,9 +65,9 @@ public class ExpensesController(ICurrentUserService currentUserService, IExpense
             var expense = await expenseService.UpdateAsync(userId, id, request, cancellationToken);
             return expense is null ? NotFound() : Ok(expense);
         }
-        catch (InvalidOperationException exception)
+        catch (BusinessValidationException exception)
         {
-            ModelState.AddModelError(nameof(request.CategoryId), exception.Message);
+            ModelState.AddModelError(exception.Field, exception.Message);
             return ValidationProblem(ModelState);
         }
     }

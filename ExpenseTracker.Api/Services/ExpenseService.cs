@@ -2,6 +2,7 @@ using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.Dtos.Expenses;
 using ExpenseTracker.Api.Entities;
 using ExpenseTracker.Api.Enums;
+using ExpenseTracker.Api.Exceptions;
 using ExpenseTracker.Api.Services.Interfaces;
 using ExpenseTracker.Api.Services.Models;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,7 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
     {
         // A user can only create expenses against categories they are allowed to use.
         var category = await categoryService.GetOwnedCategoryAsync(userId, request.CategoryId, cancellationToken)
-            ?? throw new InvalidOperationException("Invalid category selected.");
+            ?? throw new InvalidCategorySelectionException(nameof(request.CategoryId));
 
         var expense = new Expense
         {
@@ -76,7 +77,7 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
         }
 
         var category = await categoryService.GetOwnedCategoryAsync(userId, request.CategoryId, cancellationToken)
-            ?? throw new InvalidOperationException("Invalid category selected.");
+            ?? throw new InvalidCategorySelectionException(nameof(request.CategoryId));
 
         expense.Description = request.Description.Trim();
         expense.Amount = decimal.Round(request.Amount, 2);

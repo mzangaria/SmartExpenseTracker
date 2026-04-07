@@ -6,6 +6,7 @@ using ExpenseTracker.Api.Dtos.Auth;
 using ExpenseTracker.Api.Dtos.Budgets;
 using ExpenseTracker.Api.Dtos.Categories;
 using ExpenseTracker.Api.Dtos.Expenses;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ExpenseTracker.Tests;
 
@@ -89,6 +90,29 @@ public class ExpenseAndAnalyticsTests(ExpenseTrackerApiFactory factory) : IClass
         Assert.NotNull(filteredExpenses);
         var filteredExpense = Assert.Single(filteredExpenses);
         Assert.Equal("ILS", filteredExpense.Currency);
+    }
+
+    [Fact]
+    public async Task ExpenseCreate_ReturnsValidationProblem_ForInvalidCategory()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "invalid-expense-category@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        var response = await client.PostAsJsonAsync("/expenses", new ExpenseRequest
+        {
+            Description = "Invalid category expense",
+            Amount = 20m,
+            Currency = "ILS",
+            CategoryId = Guid.NewGuid(),
+            ExpenseDate = new DateOnly(2026, 4, 7),
+            UseAiCategory = false
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Contains("CategoryId", problem!.Errors.Keys, StringComparer.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -239,6 +263,24 @@ public class ExpenseAndAnalyticsTests(ExpenseTrackerApiFactory factory) : IClass
         Assert.NotNull(updatedVariance);
         var remainingBudget = Assert.Single(updatedVariance);
         Assert.Equal(food.Id, remainingBudget.CategoryId);
+    }
+
+    [Fact]
+    public async Task BudgetUpsert_ReturnsValidationProblem_ForInvalidCategory()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "invalid-budget-category@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        var response = await client.PutAsJsonAsync($"/budgets/{Guid.NewGuid()}", new BudgetRequest
+        {
+            Amount = 100m
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Contains("categoryId", problem!.Errors.Keys, StringComparer.OrdinalIgnoreCase);
     }
 
     private static async Task<AuthResponse> RegisterAsync(HttpClient client, string email)

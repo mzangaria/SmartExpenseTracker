@@ -1,6 +1,7 @@
 using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.Dtos.Budgets;
 using ExpenseTracker.Api.Entities;
+using ExpenseTracker.Api.Exceptions;
 using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,12 +28,12 @@ public class BudgetService(AppDbContext dbContext, ICategoryService categoryServ
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<BudgetResponse?> UpsertBudgetAsync(Guid userId, Guid categoryId, decimal amount, CancellationToken cancellationToken)
+    public async Task<BudgetResponse> UpsertBudgetAsync(Guid userId, Guid categoryId, decimal amount, CancellationToken cancellationToken)
     {
         var category = await categoryService.GetOwnedCategoryAsync(userId, categoryId, cancellationToken);
         if (category is null)
         {
-            return null;
+            throw new InvalidCategorySelectionException(nameof(categoryId));
         }
 
         var budget = await dbContext.Budgets

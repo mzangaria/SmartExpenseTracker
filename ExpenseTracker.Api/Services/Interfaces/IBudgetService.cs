@@ -6,7 +6,7 @@ public interface IBudgetService
 {
     Task<IReadOnlyList<BudgetResponse>> GetBudgetsAsync(Guid userId, CancellationToken cancellationToken);
 
-    Task<BudgetResponse?> UpsertBudgetAsync(Guid userId, Guid categoryId, decimal amount, CancellationToken cancellationToken);
+    Task<BudgetResponse> UpsertBudgetAsync(Guid userId, Guid categoryId, decimal amount, CancellationToken cancellationToken);
 
     Task<bool> DeleteBudgetAsync(Guid userId, Guid categoryId, CancellationToken cancellationToken);
 

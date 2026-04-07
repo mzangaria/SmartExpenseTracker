@@ -1,4 +1,5 @@
 using ExpenseTracker.Api.Dtos.Budgets;
+using ExpenseTracker.Api.Exceptions;
 using ExpenseTracker.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,14 +23,16 @@ public class BudgetsController(ICurrentUserService currentUserService, IBudgetSe
     public async Task<ActionResult<BudgetResponse>> UpsertBudget(Guid categoryId, BudgetRequest request, CancellationToken cancellationToken)
     {
         var userId = currentUserService.GetRequiredUserId();
-        var budget = await budgetService.UpsertBudgetAsync(userId, categoryId, request.Amount, cancellationToken);
-        if (budget is null)
+        try
         {
-            ModelState.AddModelError(nameof(categoryId), "Budget can only be set for a valid category.");
+            var budget = await budgetService.UpsertBudgetAsync(userId, categoryId, request.Amount, cancellationToken);
+            return Ok(budget);
+        }
+        catch (BusinessValidationException exception)
+        {
+            ModelState.AddModelError(exception.Field, exception.Message);
             return ValidationProblem(ModelState);
         }
-
-        return Ok(budget);
     }
 
     [HttpDelete("{categoryId:guid}")]
