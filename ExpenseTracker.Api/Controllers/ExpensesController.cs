@@ -1,6 +1,8 @@
 using ExpenseTracker.Api.Dtos.Expenses;
+using ExpenseTracker.Api.Dtos.Imports;
 using ExpenseTracker.Api.Exceptions;
 using ExpenseTracker.Api.Services.Interfaces;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -29,6 +31,30 @@ public class ExpensesController(ICurrentUserService currentUserService, IExpense
         var userId = currentUserService.GetRequiredUserId();
         var expenses = await expenseService.GetListAsync(userId, query, cancellationToken);
         return Ok(expenses);
+    }
+
+    [HttpGet("export/csv")]
+    public async Task<FileContentResult> ExportCsv([FromQuery] ExpenseQueryParameters query, CancellationToken cancellationToken)
+    {
+        var userId = currentUserService.GetRequiredUserId();
+        var csv = await expenseService.ExportCsvAsync(userId, query, cancellationToken);
+        return File(Encoding.UTF8.GetBytes(csv), "text/csv", "expenses.csv");
+    }
+
+    [HttpPost("import/csv")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    public async Task<ActionResult<CsvImportResult>> ImportCsv(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0)
+        {
+            ModelState.AddModelError(nameof(file), "CSV file is empty.");
+            return ValidationProblem(ModelState);
+        }
+
+        var userId = currentUserService.GetRequiredUserId();
+        await using var stream = file.OpenReadStream();
+        var result = await expenseService.ImportCsvAsync(userId, stream, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

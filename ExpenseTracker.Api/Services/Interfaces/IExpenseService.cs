@@ -1,4 +1,5 @@
 using ExpenseTracker.Api.Dtos.Expenses;
+using ExpenseTracker.Api.Dtos.Imports;
 
 namespace ExpenseTracker.Api.Services.Interfaces;
 
@@ -13,4 +14,8 @@ public interface IExpenseService
     Task<ExpenseResponse?> UpdateAsync(Guid userId, Guid expenseId, ExpenseRequest request, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid userId, Guid expenseId, CancellationToken cancellationToken);
+
+    Task<string> ExportCsvAsync(Guid userId, ExpenseQueryParameters query, CancellationToken cancellationToken);
+
+    Task<CsvImportResult> ImportCsvAsync(Guid userId, Stream stream, CancellationToken cancellationToken);
 }

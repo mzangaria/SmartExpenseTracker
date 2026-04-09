@@ -1,11 +1,15 @@
 using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.Dtos.Expenses;
+using ExpenseTracker.Api.Dtos.Imports;
 using ExpenseTracker.Api.Entities;
 using ExpenseTracker.Api.Enums;
 using ExpenseTracker.Api.Exceptions;
 using ExpenseTracker.Api.Services.Interfaces;
 using ExpenseTracker.Api.Services.Models;
+using ExpenseTracker.Api.Utilities;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 namespace ExpenseTracker.Api.Services;
 
 // ExpenseService owns expense business rules and EF Core query composition.
@@ -109,6 +113,160 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
         return true;
     }
 
+    public async Task<string> ExportCsvAsync(Guid userId, ExpenseQueryParameters query, CancellationToken cancellationToken)
+    {
+        var expenses = await BuildQuery(userId, query)
+            .OrderByDescending(expense => expense.ExpenseDate)
+            .ThenByDescending(expense => expense.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        var builder = new StringBuilder();
+        builder.AppendLine(CsvUtility.BuildRow([
+            "Description",
+            "Amount",
+            "Currency",
+            "ExpenseDate",
+            "CategoryName",
+            "Merchant",
+            "Notes",
+            "CategorySource"
+        ]));
+
+        foreach (var expense in expenses)
+        {
+            builder.AppendLine(CsvUtility.BuildRow([
+                expense.Description,
+                expense.Amount.ToString("0.00", CultureInfo.InvariantCulture),
+                expense.Currency,
+                expense.ExpenseDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                expense.Category?.Name,
+                expense.Merchant,
+                expense.Notes,
+                expense.CategorySource.ToString().ToLowerInvariant()
+            ]));
+        }
+
+        return builder.ToString();
+    }
+
+    public async Task<CsvImportResult> ImportCsvAsync(Guid userId, Stream stream, CancellationToken cancellationToken)
+    {
+        var result = new CsvImportResult();
+        List<string[]> rows;
+        try
+        {
+            rows = await CsvUtility.ReadRowsAsync(stream, cancellationToken);
+        }
+        catch (FormatException exception)
+        {
+            result.Errors.Add(new CsvImportError
+            {
+                RowNumber = 1,
+                Message = $"Invalid CSV format: {exception.Message}"
+            });
+            return result;
+        }
+
+        if (rows.Count == 0)
+        {
+            result.Errors.Add(new CsvImportError { RowNumber = 1, Message = "CSV file is empty." });
+            return result;
+        }
+
+        var headers = rows[0];
+        var requiredHeaders = new[] { "Description", "Amount", "Currency", "ExpenseDate", "CategoryName" };
+        var headerMap = BuildHeaderMap(headers);
+
+        var missingHeaders = requiredHeaders.Where(header => !headerMap.ContainsKey(header)).ToList();
+        if (missingHeaders.Count > 0)
+        {
+            result.Errors.Add(new CsvImportError
+            {
+                RowNumber = 1,
+                Message = $"Missing required header(s): {string.Join(", ", missingHeaders)}."
+            });
+            return result;
+        }
+
+        var categories = await categoryService.GetAllowedCategoryEntitiesAsync(userId, cancellationToken);
+        var categoriesByName = categories.ToDictionary(category => category.Name, StringComparer.OrdinalIgnoreCase);
+
+        for (var rowIndex = 1; rowIndex < rows.Count; rowIndex++)
+        {
+            var rowNumber = rowIndex + 1;
+            var row = rows[rowIndex];
+
+            try
+            {
+                var description = GetValue(row, headerMap, "Description").Trim();
+                var amountValue = GetValue(row, headerMap, "Amount").Trim();
+                var currency = GetValue(row, headerMap, "Currency").Trim();
+                var expenseDateValue = GetValue(row, headerMap, "ExpenseDate").Trim();
+                var categoryName = GetValue(row, headerMap, "CategoryName").Trim();
+                var merchant = GetOptionalValue(row, headerMap, "Merchant");
+                var notes = GetOptionalValue(row, headerMap, "Notes");
+                var categorySourceValue = GetOptionalValue(row, headerMap, "CategorySource");
+
+                if (string.IsNullOrWhiteSpace(description))
+                {
+                    throw new FormatException("Description is required.");
+                }
+
+                if (!CsvUtility.TryParseDecimal(amountValue, out var amount) || amount <= 0)
+                {
+                    throw new FormatException("Amount must be a positive decimal number.");
+                }
+
+                if (!string.Equals(currency, ManagedCurrency, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new FormatException("Currency must be ILS.");
+                }
+
+                if (!CsvUtility.TryParseDateOnly(expenseDateValue, out var expenseDate))
+                {
+                    throw new FormatException("ExpenseDate must use yyyy-MM-dd format.");
+                }
+
+                if (!categoriesByName.TryGetValue(categoryName, out var category))
+                {
+                    throw new FormatException($"Unknown category '{categoryName}'.");
+                }
+
+                var categorySource = string.Equals(categorySourceValue, "ai", StringComparison.OrdinalIgnoreCase)
+                    ? CategorySource.Ai
+                    : CategorySource.Manual;
+
+                dbContext.Expenses.Add(new Expense
+                {
+                    UserId = userId,
+                    Description = description,
+                    Amount = decimal.Round(amount, 2),
+                    Currency = ManagedCurrency,
+                    CategoryId = category.Id,
+                    ExpenseDate = expenseDate,
+                    Merchant = string.IsNullOrWhiteSpace(merchant) ? null : merchant.Trim(),
+                    Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                    CategorySource = categorySource,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    UpdatedAtUtc = DateTime.UtcNow
+                });
+
+                result.ImportedCount++;
+            }
+            catch (FormatException exception)
+            {
+                result.Errors.Add(new CsvImportError { RowNumber = rowNumber, Message = exception.Message });
+            }
+        }
+
+        if (result.ImportedCount > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return result;
+    }
+
     private IQueryable<Expense> BuildQuery(Guid userId, ExpenseQueryParameters query)
     {
         // Build the EF query first; execution happens later when materialized with ToListAsync/FirstOrDefaultAsync.
@@ -169,5 +327,24 @@ public class ExpenseService(AppDbContext dbContext, ICategoryService categorySer
             .Replace(@"\", @"\\", StringComparison.Ordinal)
             .Replace("%", @"\%", StringComparison.Ordinal)
             .Replace("_", @"\_", StringComparison.Ordinal);
+    }
+
+    private static Dictionary<string, int> BuildHeaderMap(string[] headers)
+    {
+        return headers
+            .Select((header, index) => new { Header = header.Trim(), Index = index })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Header))
+            .ToDictionary(item => item.Header, item => item.Index, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string GetValue(string[] row, IReadOnlyDictionary<string, int> headerMap, string header)
+    {
+        var index = headerMap[header];
+        return index < row.Length ? row[index] : string.Empty;
+    }
+
+    private static string? GetOptionalValue(string[] row, IReadOnlyDictionary<string, int> headerMap, string header)
+    {
+        return headerMap.TryGetValue(header, out var index) && index < row.Length ? row[index] : null;
     }
 }

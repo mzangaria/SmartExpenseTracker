@@ -1,6 +1,6 @@
-@ExpenseTracker.Api_HostAddress = http://localhost:5134
+@ExpenseTracker_Api_HostAddress = http://localhost:5134
 
-GET {{ExpenseTracker.Api_HostAddress}}/weatherforecast/
+GET {{ExpenseTracker_Api_HostAddress}}/expenses
 Accept: application/json
 
 ###

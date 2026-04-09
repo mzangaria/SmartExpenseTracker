@@ -1,11 +1,13 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using ExpenseTracker.Api.Dtos.Ai;
 using ExpenseTracker.Api.Dtos.Analytics;
 using ExpenseTracker.Api.Dtos.Auth;
 using ExpenseTracker.Api.Dtos.Budgets;
 using ExpenseTracker.Api.Dtos.Categories;
 using ExpenseTracker.Api.Dtos.Expenses;
+using ExpenseTracker.Api.Dtos.Imports;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExpenseTracker.Tests;
@@ -281,6 +283,158 @@ public class ExpenseAndAnalyticsTests(ExpenseTrackerApiFactory factory) : IClass
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
         Assert.NotNull(problem);
         Assert.Contains("categoryId", problem!.Errors.Keys, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Expenses_CanBeExported_And_Imported_AsCsv()
+    {
+        using var exportClient = factory.CreateClient();
+        var exportSession = await RegisterAsync(exportClient, "csv-expenses-export@example.com");
+        exportClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", exportSession.Token);
+
+        var categories = await exportClient.GetFromJsonAsync<List<CategoryResponse>>("/categories");
+        Assert.NotNull(categories);
+        var food = categories!.First(category => category.Name == "Food");
+
+        var createResponse = await exportClient.PostAsJsonAsync("/expenses", new ExpenseRequest
+        {
+            Description = "Lunch, with team",
+            Amount = 55.25m,
+            Currency = "ILS",
+            CategoryId = food.Id,
+            ExpenseDate = new DateOnly(2026, 4, 8),
+            Merchant = "Cafe 101",
+            Notes = "Quoted \"note\"",
+            UseAiCategory = false
+        });
+        createResponse.EnsureSuccessStatusCode();
+
+        var exportResponse = await exportClient.GetAsync("/expenses/export/csv");
+        exportResponse.EnsureSuccessStatusCode();
+        var csv = await exportResponse.Content.ReadAsStringAsync();
+
+        Assert.Contains("Description,Amount,Currency,ExpenseDate,CategoryName,Merchant,Notes,CategorySource", csv);
+        Assert.Contains("\"Lunch, with team\"", csv);
+        Assert.Contains("\"Quoted \"\"note\"\"\"", csv);
+
+        using var importClient = factory.CreateClient();
+        var importSession = await RegisterAsync(importClient, "csv-expenses-import@example.com");
+        importClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", importSession.Token);
+
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(csv)), "file", "expenses.csv");
+
+        var importResponse = await importClient.PostAsync("/expenses/import/csv", content);
+        importResponse.EnsureSuccessStatusCode();
+        var importResult = await importResponse.Content.ReadFromJsonAsync<CsvImportResult>();
+
+        Assert.NotNull(importResult);
+        Assert.Equal(1, importResult!.ImportedCount);
+        Assert.Empty(importResult.Errors);
+
+        var importedExpenses = await importClient.GetFromJsonAsync<List<ExpenseResponse>>("/expenses");
+        Assert.NotNull(importedExpenses);
+        var importedExpense = Assert.Single(importedExpenses!);
+        Assert.Equal("Lunch, with team", importedExpense.Description);
+        Assert.Equal(55.25m, importedExpense.Amount);
+        Assert.Equal("Food", importedExpense.CategoryName);
+        Assert.Equal("Cafe 101", importedExpense.Merchant);
+        Assert.Equal("Quoted \"note\"", importedExpense.Notes);
+    }
+
+    [Fact]
+    public async Task Expenses_ImportCsv_ReturnsStructuredError_ForMalformedCsv()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "csv-expenses-malformed@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        const string csv = "Description,Amount,Currency,ExpenseDate,CategoryName\r\n\"Broken,12.00,ILS,2026-04-08,Food";
+
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(csv)), "file", "expenses.csv");
+
+        var response = await client.PostAsync("/expenses/import/csv", content);
+        response.EnsureSuccessStatusCode();
+
+        var importResult = await response.Content.ReadFromJsonAsync<CsvImportResult>();
+        Assert.NotNull(importResult);
+        Assert.Equal(0, importResult!.ImportedCount);
+
+        var error = Assert.Single(importResult.Errors);
+        Assert.Equal(1, error.RowNumber);
+        Assert.Contains("Invalid CSV format:", error.Message);
+        Assert.Contains("unterminated quoted value", error.Message);
+    }
+
+    [Fact]
+    public async Task Budgets_CanBeExported_And_Imported_AsCsv()
+    {
+        using var exportClient = factory.CreateClient();
+        var exportSession = await RegisterAsync(exportClient, "csv-budgets-export@example.com");
+        exportClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", exportSession.Token);
+
+        var categories = await exportClient.GetFromJsonAsync<List<CategoryResponse>>("/categories");
+        Assert.NotNull(categories);
+        var food = categories!.First(category => category.Name == "Food");
+        var transport = categories.First(category => category.Name == "Transport");
+
+        (await exportClient.PutAsJsonAsync($"/budgets/{food.Id}", new BudgetRequest { Amount = 100m })).EnsureSuccessStatusCode();
+        (await exportClient.PutAsJsonAsync($"/budgets/{transport.Id}", new BudgetRequest { Amount = 80m })).EnsureSuccessStatusCode();
+
+        var exportResponse = await exportClient.GetAsync("/budgets/export/csv");
+        exportResponse.EnsureSuccessStatusCode();
+        var csv = await exportResponse.Content.ReadAsStringAsync();
+
+        Assert.Contains("CategoryName,Amount", csv);
+        Assert.Contains("Food,100.00", csv);
+        Assert.Contains("Transport,80.00", csv);
+
+        using var importClient = factory.CreateClient();
+        var importSession = await RegisterAsync(importClient, "csv-budgets-import@example.com");
+        importClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", importSession.Token);
+
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(csv)), "file", "budgets.csv");
+
+        var importResponse = await importClient.PostAsync("/budgets/import/csv", content);
+        importResponse.EnsureSuccessStatusCode();
+        var importResult = await importResponse.Content.ReadFromJsonAsync<CsvImportResult>();
+
+        Assert.NotNull(importResult);
+        Assert.Equal(2, importResult!.ImportedCount);
+        Assert.Empty(importResult.Errors);
+
+        var importedBudgets = await importClient.GetFromJsonAsync<List<BudgetResponse>>("/budgets");
+        Assert.NotNull(importedBudgets);
+        Assert.Equal(2, importedBudgets!.Count);
+        Assert.Contains(importedBudgets, budget => budget.CategoryName == "Food" && budget.Amount == 100m);
+        Assert.Contains(importedBudgets, budget => budget.CategoryName == "Transport" && budget.Amount == 80m);
+    }
+
+    [Fact]
+    public async Task Budgets_ImportCsv_ReturnsStructuredError_ForMalformedCsv()
+    {
+        using var client = factory.CreateClient();
+        var session = await RegisterAsync(client, "csv-budgets-malformed@example.com");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        const string csv = "CategoryName,Amount\r\n\"Food,100.00";
+
+        using var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(csv)), "file", "budgets.csv");
+
+        var response = await client.PostAsync("/budgets/import/csv", content);
+        response.EnsureSuccessStatusCode();
+
+        var importResult = await response.Content.ReadFromJsonAsync<CsvImportResult>();
+        Assert.NotNull(importResult);
+        Assert.Equal(0, importResult!.ImportedCount);
+
+        var error = Assert.Single(importResult.Errors);
+        Assert.Equal(1, error.RowNumber);
+        Assert.Contains("Invalid CSV format:", error.Message);
+        Assert.Contains("unterminated quoted value", error.Message);
     }
 
     private static async Task<AuthResponse> RegisterAsync(HttpClient client, string email)
