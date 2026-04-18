@@ -18,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
+builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 
 var useInMemoryDatabase = builder.Environment.IsEnvironment("Testing") || builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -49,11 +50,21 @@ builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 builder.Services.AddScoped<IBudgetService, BudgetService>();
 builder.Services.AddScoped<IFinancialMessageService, FinancialMessageService>();
+builder.Services.AddScoped<ITelegramConnectionService, TelegramConnectionService>();
+builder.Services.AddScoped<ITelegramUpdateHandler, TelegramUpdateHandler>();
+builder.Services.AddScoped<IExpenseMessageParser, ExpenseMessageParser>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ILoginAttemptTracker, MemoryLoginAttemptTracker>();
 builder.Services
     .AddHttpClient<IAiClassificationService, GeminiAiClassificationService>()
     .RemoveAllLoggers();
+builder.Services
+    .AddHttpClient<IExpenseAiParser, GeminiExpenseAiParser>()
+    .RemoveAllLoggers();
+builder.Services
+    .AddHttpClient<ITelegramBotClient, TelegramBotClient>()
+    .RemoveAllLoggers();
+builder.Services.AddHostedService<TelegramPollingHostedService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("JWT configuration is missing.");

@@ -17,6 +17,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<FinancialMessage> FinancialMessages => Set<FinancialMessage>();
 
+    public DbSet<TelegramConnection> TelegramConnections => Set<TelegramConnection>();
+
+    public DbSet<TelegramLinkToken> TelegramLinkTokens => Set<TelegramLinkToken>();
+
+    public DbSet<TelegramUpdateProcessed> TelegramUpdatesProcessed => Set<TelegramUpdateProcessed>();
+
+    public DbSet<ExpenseIngestionLog> ExpenseIngestionLogs => Set<ExpenseIngestionLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // User email is unique and required because it is the login identity.
@@ -91,6 +99,56 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(user => user.FinancialMessages)
                 .HasForeignKey(message => message.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelegramConnection>(entity =>
+        {
+            entity.HasKey(connection => connection.Id);
+            entity.HasIndex(connection => new { connection.UserId, connection.IsActive });
+            entity.HasIndex(connection => new { connection.TelegramChatId, connection.IsActive });
+            entity.HasIndex(connection => new { connection.TelegramUserId, connection.IsActive });
+            entity.HasOne(connection => connection.User)
+                .WithMany(user => user.TelegramConnections)
+                .HasForeignKey(connection => connection.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelegramLinkToken>(entity =>
+        {
+            entity.HasKey(token => token.Id);
+            entity.Property(token => token.TokenHash).HasMaxLength(128).IsRequired();
+            entity.HasIndex(token => token.TokenHash).IsUnique();
+            entity.HasIndex(token => new { token.UserId, token.ExpiresAtUtc });
+            entity.HasOne(token => token.User)
+                .WithMany(user => user.TelegramLinkTokens)
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelegramUpdateProcessed>(entity =>
+        {
+            entity.HasKey(update => update.Id);
+            entity.HasIndex(update => update.UpdateId).IsUnique();
+            entity.HasIndex(update => new { update.ChatId, update.MessageId });
+        });
+
+        modelBuilder.Entity<ExpenseIngestionLog>(entity =>
+        {
+            entity.HasKey(log => log.Id);
+            entity.Property(log => log.Channel).HasMaxLength(40).IsRequired();
+            entity.Property(log => log.OriginalText).HasMaxLength(2000).IsRequired();
+            entity.Property(log => log.ParserType).HasMaxLength(40).IsRequired();
+            entity.Property(log => log.ParsedPayloadJson).HasMaxLength(4000);
+            entity.Property(log => log.Confidence).HasPrecision(5, 4);
+            entity.Property(log => log.Status).HasMaxLength(40).IsRequired();
+            entity.Property(log => log.ErrorMessage).HasMaxLength(1000);
+            entity.Property(log => log.ClarificationQuestion).HasMaxLength(1000);
+            entity.HasIndex(log => new { log.UserId, log.Channel, log.CreatedAtUtc });
+            entity.HasIndex(log => new { log.TelegramUpdateId, log.TelegramMessageId });
+            entity.HasOne(log => log.User)
+                .WithMany(user => user.ExpenseIngestionLogs)
+                .HasForeignKey(log => log.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Built-in categories are seeded into the model so every environment starts with the same base set.

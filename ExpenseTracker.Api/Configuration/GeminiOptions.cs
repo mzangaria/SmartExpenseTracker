@@ -8,5 +8,7 @@ public class GeminiOptions
 
     public string Model { get; set; } = "gemini-2.0-flash";
 
+    public string ExpenseParsingModel { get; set; } = "gemini-2.5-flash";
+
     public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/v1beta";
 }

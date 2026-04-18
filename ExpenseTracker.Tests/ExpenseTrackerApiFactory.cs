@@ -16,7 +16,9 @@ public class ExpenseTrackerApiFactory : WebApplicationFactory<Program>
             {
                 ["UseInMemoryDatabase"] = "true",
                 ["InMemoryDatabaseName"] = $"expense-tracker-tests-{Guid.NewGuid()}",
-                ["Gemini:ApiKey"] = string.Empty
+                ["Gemini:ApiKey"] = string.Empty,
+                ["Telegram:BotUsername"] = "ExpenseTrackerTestBot",
+                ["Telegram:EnablePolling"] = "false"
             });
         });
     }

@@ -19,4 +19,10 @@ public class User
     public ICollection<Budget> Budgets { get; set; } = new List<Budget>();
 
     public ICollection<FinancialMessage> FinancialMessages { get; set; } = new List<FinancialMessage>();
+
+    public ICollection<TelegramConnection> TelegramConnections { get; set; } = new List<TelegramConnection>();
+
+    public ICollection<TelegramLinkToken> TelegramLinkTokens { get; set; } = new List<TelegramLinkToken>();
+
+    public ICollection<ExpenseIngestionLog> ExpenseIngestionLogs { get; set; } = new List<ExpenseIngestionLog>();
 }
